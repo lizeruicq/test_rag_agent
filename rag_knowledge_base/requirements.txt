@@ -1,0 +1,5 @@
+agentscope>=1.0.16
+python-docx
+PyPDF2
+pandas
+openpyxl

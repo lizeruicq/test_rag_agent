@@ -1,15 +1,15 @@
 # RAG 知识库系统
 
-这是一个基于 AgentScope 的 RAG（检索增强生成）知识库系统，支持多种文档格式的上传和管理，并集成了智能体来处理用户查询。
+基于 AgentScope 的 RAG（检索增强生成）知识库系统，支持多种文档格式的上传与管理，集成 ReAct 智能体实现智能问答。采用 **async/await** 设计，便于嵌入异步应用。
 
 ## 功能特点
 
-- ✅ **多格式文档支持**：Word (.docx)、PDF (.pdf)、纯文本 (.txt)、Excel (.xlsx, .xls)
-- ✅ **智能文档管理**：MD5 去重、自动分块、元数据管理
-- ✅ **向量化存储**：基于 Qdrant 的高效向量存储和检索
-- ✅ **智能问答**：集成 AgentScope 智能体，从知识库中检索信息并生成回答
-- ✅ **持久化存储**：知识库数据和文档元数据持久化
-- ✅ **可扩展架构**：易于添加新的文档读取器和功能
+- **多格式文档支持**：Word (.docx)、PDF (.pdf)、纯文本 (.txt)、Excel (.xlsx, .xls)
+- **智能文档管理**：MD5 去重、自动分块、元数据管理
+- **向量化存储**：基于 Qdrant 的向量存储与检索（支持内存模式与持久化）
+- **ReAct 智能体**：集成 AgentScope ReActAgent，自动检索知识库并生成回答
+- **异步优先**：全程 async/await，可无缝嵌入 FastAPI 等异步框架
+- **可扩展架构**：RAGKnowledgeBase 继承 KnowledgeBase，与 AgentScope 生态兼容
 
 ## 安装依赖
 
@@ -17,189 +17,184 @@
 pip install -r requirements.txt
 ```
 
-如果要使用 OpenAI 的嵌入模型，还需要安装：
+## 环境变量
 
-```bash
-pip install openai
-```
-
-## 环境变量配置
-
-在运行之前，请设置必要的 API 密钥：
+运行前需配置 DashScope API 密钥：
 
 ```bash
 export DASHSCOPE_API_KEY="your_dashscope_api_key_here"
-# 或者如果使用 OpenAI
-export OPENAI_API_KEY="your_openai_api_key_here"
 ```
 
-## 使用方法
+## 快速开始
 
-### 快速开始 - 交互式菜单
-
-最简单的使用方式是运行主程序的交互式菜单：
+### 交互式菜单
 
 ```bash
-cd /path/to/rag_knowledge_base
-python main.py
+# 在项目根目录执行
+python rag_knowledge_base/main.py
 ```
 
 菜单选项：
-```
-1. 添加文档  2. 查询  3. 统计  4. 退出
-```
 
-**功能说明：**
-- **选项 1 - 添加文档**：输入文件或目录路径，系统会自动识别支持的文件类型并添加到知识库
-- **选项 2 - 查询**：输入问题，智能体会从知识库中检索相关信息并生成回答
-- **选项 3 - 统计**：显示知识库中管理的文件数量和总大小
-- **选项 4 - 退出**：退出程序
+| 选项 | 功能 |
+|------|------|
+| 1 | 添加文档：输入文件或目录路径，自动识别格式并入库 |
+| 2 | 查询：输入问题，智能体检索知识库并回答 |
+| 3 | 统计：显示 DataLoader 管理的文件数与总大小 |
+| 4 | 删除文档：按序号或 `all` 删除已入库文档 |
+| 5 | 退出 |
 
-### 编程方式使用
+**说明**：默认 `persist_path=None`，向量库为内存模式，进程退出后数据清空。若需持久化，在 `main.py` 中为 `RAGKnowledgeBase` 指定 `persist_path="./persist_data"`。
 
-#### 基础用法 - 管理知识库
+## 编程使用
+
+### 异步 API（推荐）
+
+所有核心方法均为异步，可在已有事件循环中直接 `await`：
 
 ```python
+import asyncio
+from rag_knowledge_base.main import SimpleRAGSystem
+
+async def main():
+    system = SimpleRAGSystem()
+
+    # 添加文档
+    await system.add_documents("/path/to/document.pdf")
+    await system.add_documents("/path/to/directory")
+
+    # 查询
+    answer = await system.query("你的问题")
+    print(answer)
+
+    # 删除文档（交互式）
+    await system.delete_documents_interactive()
+
+asyncio.run(main())
+```
+
+### 嵌入 FastAPI 示例
+
+```python
+from fastapi import FastAPI
+from rag_knowledge_base.main import SimpleRAGSystem
+
+app = FastAPI()
+system = SimpleRAGSystem()
+
+@app.post("/query")
+async def api_query(question: str):
+    answer = await system.query(question)
+    return {"answer": answer}
+
+@app.post("/ingest")
+async def api_ingest(path: str):
+    await system.add_documents(path)
+    return {"status": "ok"}
+```
+
+### 直接使用知识库与智能体
+
+```python
+import asyncio
 from rag_knowledge_base.rag_knowledge import RAGKnowledgeBase
 from rag_knowledge_base.data.data_loader import DataLoader
-
-# 初始化知识库
-kb = RAGKnowledgeBase(
-    embedding_model="dashscope",  # 或 "openai"
-    model_name="text-embedding-v2",
-    api_key="your_api_key_here",
-    persist_path="./persist_data"
-)
-
-# 初始化数据加载器
-loader = DataLoader(data_dir="./data/documents")
-
-# 添加单个文档
-success, processed_path = loader.load_file("path/to/document.pdf")
-if success and processed_path:
-    kb.add_processed_document_from_dataloader(processed_path)
-
-# 添加整个目录的文档
-stats = loader.load_directory("./my_documents")
-for file_info in stats['loaded_files']:
-    kb.add_processed_document_from_dataloader(file_info['processed'])
-
-# 查看统计信息
-stats = loader.get_statistics()
-print(f"总文件数: {stats['total_files']}")
-print(f"按类型统计: {stats['by_extension']}")
-print(f"总大小: {stats['total_size']} 字节")
-```
-
-#### 高级用法 - 使用智能体进行问答
-
-```python
-from rag_knowledge_base.rag_knowledge import RAGKnowledgeBase
-from rag_knowledge_base.agents.rag_agent import SimpleRAGAgent
+from rag_knowledge_base.agents.rag_agent import SpecializedRAGAgent
 from agentscope.message import Msg
 
-# 初始化知识库
-kb = RAGKnowledgeBase(
-    embedding_model="dashscope",
-    model_name="text-embedding-v2",
-    api_key="your_api_key_here",
-    persist_path="./persist_data"
-)
+async def main():
+    # 初始化知识库（persist_path=None 为内存模式）
+    kb = RAGKnowledgeBase(
+        embedding_model="dashscope",
+        model_name="text-embedding-v4",
+        api_key="your_api_key",  # 或从环境变量读取
+        persist_path="./persist_data",  # 持久化路径，None 则内存
+    )
 
-# 创建 RAG 智能体
-agent = SimpleRAGAgent(
-    name="RAG_Agent",
-    knowledge_base=kb,
-    model_name="qwen-max",
-    retrieve_limit=5,
-    score_threshold=0.5
-)
+    # 加载文档
+    loader = DataLoader(data_dir="./data/documents")
+    success, processed = loader.load_file("path/to/document.pdf")
+    if success and processed:
+        await kb.add_processed_document_from_dataloader(processed, overwrite=True)
 
-# 提问
-msg = Msg(name="User", content="你的问题", role="user")
-response = agent(msg)
-print(f"回答: {response.content}")
+    # 创建智能体
+    agent = SpecializedRAGAgent(name="RAG_Agent", knowledge_base=kb)
+
+    # 提问
+    msg = Msg(name="User", content="你的问题", role="user")
+    response = await agent(msg)
+    print(response.content)
+
+asyncio.run(main())
 ```
 
-#### 直接检索文档
+### 直接检索
 
 ```python
-from rag_knowledge_base.rag_knowledge import RAGKnowledgeBase
-
-kb = RAGKnowledgeBase(
-    embedding_model="dashscope",
-    model_name="text-embedding-v2",
-    api_key="your_api_key_here",
-    persist_path="./persist_data"
-)
-
-# 检索相关文档
-results = kb.retrieve(
-    query="你的问题",
-    limit=5,
-    score_threshold=0.5
-)
-
-# 处理结果
-for doc in results:
-    print(f"来源: {doc['metadata']['source']}")
-    print(f"内容: {doc['content'][:200]}...")
+# 异步检索，返回 list[Document]
+docs = await kb.retrieve(query="你的问题", limit=5, score_threshold=0.5)
+for doc in docs:
+    content = doc.metadata.content.get("text", "") if isinstance(doc.metadata.content, dict) else ""
+    print(content[:200])
 ```
 
 ## 项目结构
 
 ```
 rag_knowledge_base/
-├── README.md                           # 本说明文件
-├── requirements.txt                    # 项目依赖
-├── __init__.py                         # 包初始化
-├── main.py                             # 主程序入口 - 交互式菜单
-├── rag_knowledge.py                    # RAG 知识库核心类
-├── agents/                             # 智能体模块
-│   ├── __init__.py
-│   └── rag_agent.py                    # SimpleRAGAgent - 智能问答智能体
-├── data/                               # 数据管理模块
-│   ├── __init__.py
-│   └── data_loader.py                  # DataLoader - 文档加载和管理
-└── utils/                              # 工具模块
-    ├── __init__.py
-    └── document_readers.py             # 文档读取器 - 支持多种格式
+├── README.md                 # 本说明
+├── requirements.txt          # 依赖
+├── main.py                   # 主程序入口（交互式菜单）
+├── rag_knowledge.py          # RAGKnowledgeBase（继承 KnowledgeBase）
+├── agents/
+│   └── rag_agent.py          # SimpleRAGAgent / SpecializedRAGAgent
+├── data/
+│   └── data_loader.py       # DataLoader（文档加载、MD5 去重）
+└── utils/
+    └── document_readers.py   # 文档读取器（Txt、PDF、Docx、Excel）
 ```
 
-### 核心模块说明
+## 核心模块
 
-#### `rag_knowledge.py` - RAGKnowledgeBase 类
-- **功能**：知识库的核心类，管理向量存储和文档检索
+### `rag_knowledge.py` — RAGKnowledgeBase
+
+- 继承 `KnowledgeBase`，与 AgentScope ReActAgent 兼容
 - **主要方法**：
-  - `add_processed_document_from_dataloader()`：添加处理后的文档
-  - `retrieve()`：检索相关文档
+  - `async add_processed_document_from_dataloader(processed_path, overwrite)`：从 DataLoader 处理结果添加文档
+  - `async retrieve(query, limit, score_threshold)`：检索相关文档，返回 `list[Document]`
+  - `async add_documents(documents)`：KnowledgeBase 接口，直接添加 Document 列表
+  - `async delete_document_by_md5(file_md5)`：按 MD5 删除文档
+- **空集合**：未添加过文档时检索会返回空列表，不会报错
 
-#### `agents/rag_agent.py` - SimpleRAGAgent 类
-- **功能**：智能体，从知识库检索信息并生成回答
-- **特点**：
-  - 自动从知识库检索相关文档
-  - 使用 LLM 生成自然语言回答
-  - 支持自定义检索参数
+### `agents/rag_agent.py` — SimpleRAGAgent
 
-#### `data/data_loader.py` - DataLoader 类
-- **功能**：文档加载和管理系统
-- **特点**：
-  - MD5 去重检测
-  - 自动文档分块
-  - 元数据管理
-  - 支持单文件和批量加载
+- 基于 ReActAgent，自动检索知识库并生成回答
+- 注册 `retrieve_from_knowledge_base` 工具，返回 `ToolResponse`
+- 与官方案例一致：`knowledge=self.kb`（单对象，ReActAgent 会自动转为列表）
 
-#### `utils/document_readers.py` - 文档读取器
-- **支持的格式**：
-  - `.txt` - TxtReader
-  - `.pdf` - PdfReader
-  - `.docx` - DocxReader
-  - `.xlsx`, `.xls` - ExcelReader
-- **特点**：自动文本分块，保留文档来源信息
+### `data/data_loader.py` — DataLoader
 
-## 如何贡献
+- MD5 去重、自动分块、元数据管理
+- 支持：`.txt`、`.docx`、`.pdf`、`.xlsx`、`.xls`
+- `load_file(path)` → `(success, processed_path)`
+- `load_directory(path)` → 批量加载统计
 
-如果您发现任何问题或想添加新功能，请提交 Issue 或 Pull Request。
+### `utils/document_readers.py` — 文档读取器
+
+- 按扩展名自动选择读取器
+- 支持 TxtReader、PdfReader、DocxReader、ExcelReader
+
+## 配置说明
+
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `embedding_model` | 嵌入模型类型 | `"dashscope"` |
+| `model_name` | 嵌入模型名 | `"text-embedding-v4"` |
+| `persist_path` | 持久化路径，`None` 为内存 | `"./persist_data"` |
+| `collection_name` | Qdrant 集合名 | `"rag_knowledge_base"` |
+| `recreate` | 是否重建知识库 | `False` |
+
+**注意**：`text-embedding-v4` 的向量维度需与 Qdrant 集合一致。若更换 embedding 模型，需删除旧 `persist_data/vector_store` 或设置 `recreate=True`。
 
 ## 许可证
 

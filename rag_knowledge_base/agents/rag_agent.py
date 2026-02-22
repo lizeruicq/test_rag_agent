@@ -3,8 +3,9 @@ RAG 智能体 - 从知识库中检索信息并生成回答
 """
 from typing import Optional
 from agentscope.agent import AgentBase
-from agentscope.message import Msg
+from agentscope.message import Msg, TextBlock
 from agentscope.model import DashScopeChatModel
+from agentscope.tool import ToolResponse
 from agentscope.agent import ReActAgent
 from agentscope.tool import Toolkit
 from agentscope.formatter import DashScopeChatFormatter
@@ -66,11 +67,11 @@ class SimpleRAGAgent(AgentBase):
             model=self.model,
             formatter=formatter,
             toolkit=toolkit,
-            knowledge=self.kb,
+            knowledge=self.kb,  # 与官方案例一致，RAGKnowledgeBase 继承 KnowledgeBase 后会自动转为列表
             max_iters=10,
         )
 
-    async def retrieve_from_knowledge_base(self, query: str, limit: int = 5, score_threshold: float = 0.5) -> str:
+    async def retrieve_from_knowledge_base(self, query: str, limit: int = 5, score_threshold: float = 0.5) -> ToolResponse:
         """
         从知识库中检索信息的异步工具函数
         
@@ -80,29 +81,33 @@ class SimpleRAGAgent(AgentBase):
             score_threshold: 相似度阈值
             
         Returns:
-            检索到的结果
+            ToolResponse 对象
         """
         try:
-            retrieved_docs = self.kb.retrieve(
+            retrieved_docs = await self.kb.retrieve(
                 query=query,
                 limit=limit,
                 score_threshold=score_threshold
             )
             
             if not retrieved_docs:
-                return "未找到与查询相关的信息。"
+                return ToolResponse(content=[TextBlock(type="text", text="未找到与查询相关的信息。")])
             
-            # 格式化结果
+            # 格式化结果（Document 对象）
             formatted_results = []
             for i, doc in enumerate(retrieved_docs, 1):
-                source = doc.get("metadata", {}).get("source", "未知来源")
-                content = doc.get("content", "")[:500]  # 限制每个文档的长度
+                source = getattr(doc.metadata, "doc_id", "未知来源")
+                content = (
+                    doc.metadata.content.get("text", "")
+                    if isinstance(doc.metadata.content, dict)
+                    else str(getattr(doc.metadata.content, "text", doc.metadata.content))
+                )[:500]
                 formatted_result = f"[文档 {i}] (来源: {source})\n{content}\n"
                 formatted_results.append(formatted_result)
             
-            return "\n".join(formatted_results)
+            return ToolResponse(content=[TextBlock(type="text", text="\n".join(formatted_results))])
         except Exception as e:
-            return f"检索过程中发生错误: {str(e)}"
+            return ToolResponse(content=[TextBlock(type="text", text=f"检索过程中发生错误: {str(e)}")])
 
     async def reply(self, msg: Msg) -> Msg:
         """

@@ -1,0 +1,11 @@
+{
+  "0ca0bef660b3b9dfc1db859f2eec1210": {
+    "original_path": "/Volumes/EAGET/test_agent/example.txt",
+    "stored_name": "0ca0bef660b3b9dfc1db859f2eec1210.txt",
+    "processed_path": "data/documents/processed_documents/0ca0bef660b3b9dfc1db859f2eec1210.json",
+    "file_size": 55,
+    "file_extension": ".txt",
+    "added_timestamp": "2026-02-22T13:12:03.640970",
+    "md5_hash": "0ca0bef660b3b9dfc1db859f2eec1210"
+  }
+}

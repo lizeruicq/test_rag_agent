@@ -5,18 +5,18 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import pickle
 
-from agentscope.rag import SimpleKnowledge, QdrantStore, Document, DocMetadata
+from agentscope.rag import SimpleKnowledge, QdrantStore, Document, DocMetadata, KnowledgeBase
 import asyncio
 from agentscope.embedding import DashScopeTextEmbedding
 
 
-class RAGKnowledgeBase:
+class RAGKnowledgeBase(KnowledgeBase):
     """A RAG knowledge base supporting multiple document formats."""
     
     def __init__(
         self,
         embedding_model: str = "dashscope",
-        model_name: str = "text-embedding-v2",
+        model_name: str = "text-embedding-v4",
         api_key: Optional[str] = None,
         persist_path: Optional[str] = "./persist_data",
         collection_name: str = "rag_knowledge_base",
@@ -56,7 +56,7 @@ class RAGKnowledgeBase:
         )
         print(f"Using DashScope model: {model_name}")
         # Default dimension: 1024 for text-embedding-v2, otherwise 1536
-        self.dimensions = 1024 if "v2" in model_name else 1536
+        self.dimensions = 1024
         
         # Initialize vector store
         if persist_path and not recreate:
@@ -97,7 +97,12 @@ class RAGKnowledgeBase:
             embedding_store=self.vector_store,
             embedding_model=self.embedding_model
         )
-        
+        # Required by KnowledgeBase: parent expects embedding_store and embedding_model
+        super().__init__(
+            embedding_store=self.vector_store,
+            embedding_model=self.embedding_model,
+        )
+
         # Load document mapping if it exists
         self.doc_mapping_path = os.path.join(persist_path, "doc_mapping.pkl") if persist_path else None
         self.doc_mappings = self._load_doc_mappings() if self.doc_mapping_path and os.path.exists(self.doc_mapping_path) else {}
@@ -155,10 +160,6 @@ class RAGKnowledgeBase:
         self.doc_mappings.pop(file_md5, None)
         self._save_doc_mappings()
 
-    def delete_document(self, file_md5: str) -> None:
-        """Synchronous wrapper to delete document by md5 (awaits the async delete)."""
-        asyncio.run(self.delete_document_by_md5(file_md5))
-    
     async def add_processed_document_from_dataloader(self, processed_file_path: str, overwrite: bool = False) -> None:
         """Add a processed document from DataLoader to the knowledge base.
 
@@ -228,22 +229,34 @@ class RAGKnowledgeBase:
             raise
     
 
-    
-    def retrieve(self, query: str, limit: int = 5, score_threshold: float = 0.5) -> List[Dict[str, Any]]:
+    async def retrieve(
+        self,
+        query: str,
+        limit: int = 5,
+        score_threshold: float | None = 0.5,
+        **kwargs: Any,
+    ) -> list[Document]:
         """
-        Retrieve relevant documents based on the query.
-
-        Args:
-            query: Query string.
-            limit: Maximum number of documents to retrieve.
-            score_threshold: Minimum similarity score threshold.
-
-        Returns:
-            List of dictionaries containing content and metadata.
+        Retrieve relevant documents (KnowledgeBase 接口，供 ReActAgent 调用).
+        若 collection 尚未创建（未添加过文档），返回空列表。
         """
-        results = self.knowledge_base.retrieve(
-            query,
-            limit=limit,
-            score_threshold=score_threshold
-        )
-        return results
+        try:
+            return await self.knowledge_base.retrieve(
+                query=query,
+                limit=limit,
+                score_threshold=score_threshold,
+                **kwargs,
+            )
+        except ValueError as e:
+            if "not found" in str(e).lower() or "collection" in str(e).lower():
+                return []
+            raise
+
+    async def add_documents(
+        self,
+        documents: list[Document],
+        **kwargs: Any,
+    ) -> None:
+        """Add documents (KnowledgeBase 接口)."""
+        await self.knowledge_base.add_documents(documents, **kwargs)
+

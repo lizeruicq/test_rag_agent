@@ -26,22 +26,22 @@ class SimpleRAGSystem:
     def __init__(self):
         self.kb = RAGKnowledgeBase(
             embedding_model="dashscope",
-            model_name="text-embedding-v2",
+            model_name="text-embedding-v4",
             api_key=os.getenv("DASHSCOPE_API_KEY"),
             persist_path=None
         )
         self.loader = DataLoader(data_dir="./data/documents")
         self.agent = SpecializedRAGAgent(name="RAG_Agent", knowledge_base=self.kb)
     
-    def add_documents(self, path):
-        """添加文档"""
+    async def add_documents(self, path: str) -> None:
+        """添加文档（异步，可在已有事件循环中调用）。"""
         if os.path.isfile(path):
             print(f"📄 正在加载文件: {os.path.basename(path)}...")
             success, processed = self.loader.load_file(path)
             if success and processed:
                 print(f"✓ 文件加载成功，正在添加到知识库...")
                 try:
-                    asyncio.run(self.kb.add_processed_document_from_dataloader(processed, overwrite=True))
+                    await self.kb.add_processed_document_from_dataloader(processed, overwrite=True)
                     print("✓ 文档添加成功")
                 except Exception as e:
                     print(f"✗ 添加文档失败: {str(e)}")
@@ -52,12 +52,14 @@ class SimpleRAGSystem:
             stats = self.loader.load_directory(path)
             for file_info in stats['loaded_files']:
                 try:
-                    asyncio.run(self.kb.add_processed_document_from_dataloader(file_info['processed'], overwrite=True))
+                    await self.kb.add_processed_document_from_dataloader(file_info['processed'], overwrite=True)
                 except Exception as e:
                     print(f"✗ 添加文档失败: {str(e)}")
             print(f"✓ 批量添加完成: {stats['successfully_loaded']} 个文件")
+        else:
+            print(f"✗ 路径不存在或不是文件/目录: {path}")
 
-    def delete_documents_interactive(self):
+    async def delete_documents_interactive(self) -> None:
         """Interactive deletion: list available docs and delete selected ones."""
         if not self.kb.doc_mappings:
             print("当前没有可删除的文档。")
@@ -85,7 +87,7 @@ class SimpleRAGSystem:
         for md5 in targets:
             try:
                 print(f"正在从知识库删除 MD5={md5} ...")
-                asyncio.run(self.kb.delete_document_by_md5(md5))
+                await self.kb.delete_document_by_md5(md5)
                 print(f"正在删除处理文件与原始存储 for MD5={md5} ...")
                 try:
                     self.loader.delete_by_md5(md5)
@@ -95,11 +97,12 @@ class SimpleRAGSystem:
             except Exception as e:
                 print(f"删除 {md5} 失败: {e}")
     
-    def query(self, question):
-        """查询知识库"""
+    async def query(self, question: str) -> str:
+        """查询知识库。"""
         from agentscope.message import Msg
         msg = Msg(name="User", content=question, role="user")
-        return self.agent(msg).content
+        response = await self.agent(msg)
+        return response.content
     
     def stats(self):
         """显示统计信息"""
@@ -107,33 +110,35 @@ class SimpleRAGSystem:
         print(f"管理文件: {stats['total_files']} 个")
         print(f"存储大小: {stats['total_size']} 字节")
 
-def main():
+async def main_async() -> None:
+    """主流程（异步，全程使用 await，仅入口处使用一次 asyncio.run）。"""
     system = SimpleRAGSystem()
-    
+
     while True:
         print("\n1. 添加文档  2. 查询  3. 统计  4. 删除文档  5. 退出")
         choice = input("选择: ").strip()
-        
+
         if choice == "1":
             path = input("文档路径: ").strip()
             if os.path.exists(path):
-                system.add_documents(path)
+                await system.add_documents(path)
             else:
                 print("路径不存在")
-                
+
         elif choice == "2":
             question = input("问题: ").strip()
             if question:
-                answer = system.query(question)
+                answer = await system.query(question)
                 print(f"\n回答: {answer}")
-                
+
         elif choice == "3":
             system.stats()
-            
+
         elif choice == "4":
-            system.delete_documents_interactive()
+            await system.delete_documents_interactive()
         elif choice == "5":
             break
 
+
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())

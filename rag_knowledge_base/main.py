@@ -136,7 +136,7 @@ async def main_async() -> None:
     system = SimpleRAGSystem()
 
     while True:
-        print("\n1. 添加文档  2. 查询  3. 统计  4. 删除文档  5. 退出")
+        print("\n1. 添加文档  2. 查询  3. 统计  4. 删除文档  5. Web界面  6. 退出")
         choice = input("选择: ").strip()
 
         if choice == "1":
@@ -158,6 +158,19 @@ async def main_async() -> None:
         elif choice == "4":
             await system.delete_documents_interactive()
         elif choice == "5":
+            import subprocess
+            print("\n🚀 启动 Web 界面...")
+            print("📍 访问地址: http://localhost:8501")
+            print("⏳ 正在启动 Streamlit...")
+            try:
+                subprocess.Popen(
+                    ["streamlit", "run", "app.py", "--server.port=8501"],
+                    cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+                print("✅ Web 界面已启动，请在浏览器中访问 http://localhost:8501")
+            except FileNotFoundError:
+                print("❌ 未找到 streamlit，请先安装: pip install streamlit")
+        elif choice == "6":
             break
 
 

@@ -20,7 +20,8 @@ class RAGKnowledgeBase(KnowledgeBase):
         api_key: Optional[str] = None,
         persist_path: Optional[str] = "./persist_data",
         collection_name: str = "rag_knowledge_base",
-        recreate: bool = False
+        recreate: bool = False,
+        qdrant_url: Optional[str] = None
     ) -> None:
         """
         Initialize the RAG knowledge base.
@@ -59,7 +60,18 @@ class RAGKnowledgeBase(KnowledgeBase):
         self.dimensions = 1024
         
         # Initialize vector store
-        if persist_path and not recreate:
+        qdrant_url = qdrant_url or os.getenv("QDRANT_URL")
+
+        if qdrant_url:
+            # Use remote Qdrant server (Docker)
+            print(f"Connecting to Qdrant server at {qdrant_url}")
+            self.vector_store = QdrantStore(
+                location=qdrant_url,
+                collection_name=collection_name,
+                dimensions=self.dimensions,
+                client_kwargs={"timeout": 60}  # 增加超时时间到60秒
+            )
+        elif persist_path and not recreate:
             # Check if persistent data already exists
             vector_store_path = os.path.join(persist_path, "vector_store")
             if os.path.exists(vector_store_path):
@@ -104,8 +116,11 @@ class RAGKnowledgeBase(KnowledgeBase):
         )
 
         # Load document mapping if it exists
-        self.doc_mapping_path = os.path.join(persist_path, "doc_mapping.pkl") if persist_path else None
-        self.doc_mappings = self._load_doc_mappings() if self.doc_mapping_path and os.path.exists(self.doc_mapping_path) else {}
+        # 无论使用本地存储还是 Docker Qdrant，都保存 doc_mappings 到本地文件
+        mapping_dir = persist_path if persist_path else "./persist_data"
+        os.makedirs(mapping_dir, exist_ok=True)
+        self.doc_mapping_path = os.path.join(mapping_dir, "doc_mapping.pkl")
+        self.doc_mappings = self._load_doc_mappings() if os.path.exists(self.doc_mapping_path) else {}
     
     def _load_doc_mappings(self) -> dict:
         """Load document mappings from persistent storage."""

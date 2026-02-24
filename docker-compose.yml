@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Qdrant 向量数据库服务
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag_qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC API
+    volumes:
+      # 宿主机路径:容器内路径 - 数据持久化
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  # 可选：RAG 应用服务（开发时可以不启用，直接在宿主机运行代码）
+  rag_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_app
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      # 代码目录挂载（开发时实时同步代码变更）
+      - ./rag_knowledge_base:/app/rag_knowledge_base
+      # 数据目录挂载
+      - ./data:/app/data
+      # 持久化数据
+      - ./persist_data:/app/persist_data
+    depends_on:
+      - qdrant
+    command: python rag_knowledge_base/main.py
+    # 开发时保持容器运行，方便 exec 进入调试
+    # command: tail -f /dev/null

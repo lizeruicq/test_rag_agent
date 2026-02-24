@@ -71,7 +71,7 @@ class SimpleRAGAgent(AgentBase):
             max_iters=10,
         )
 
-    async def retrieve_from_knowledge_base(self, query: str, limit: int = 5, score_threshold: float = 0.5) -> ToolResponse:
+    async def retrieve_from_knowledge_base(self, query: str, limit: int = 5, score_threshold: float = 0.1) -> ToolResponse:
         """
         从知识库中检索信息的异步工具函数
         

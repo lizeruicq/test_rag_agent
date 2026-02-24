@@ -31,7 +31,7 @@ class SimpleRAGSystem:
             persist_path=None
         )
         self.loader = DataLoader(data_dir="./data/documents")
-        self.agent = SpecializedRAGAgent(name="RAG_Agent", knowledge_base=self.kb)
+        self.agent = SpecializedRAGAgent(name="RAG_Agent", knowledge_base=self.kb, score_threshold=0.1)
     
     async def add_documents(self, path: str) -> None:
         """添加文档（异步，可在已有事件循环中调用）。"""

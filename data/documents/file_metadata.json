@@ -1,11 +1,1 @@
-{
-  "1c8b1607cd0d6490764ad5a82c97ca7c": {
-    "original_path": "/Volumes/EAGET/test_agent/data/uploaded/example.txt",
-    "stored_name": "1c8b1607cd0d6490764ad5a82c97ca7c.txt",
-    "processed_path": "data/documents/processed_documents/1c8b1607cd0d6490764ad5a82c97ca7c.json",
-    "file_size": 115,
-    "file_extension": ".txt",
-    "added_timestamp": "2026-02-24T22:42:04.564482",
-    "md5_hash": "1c8b1607cd0d6490764ad5a82c97ca7c"
-  }
-}
+{}

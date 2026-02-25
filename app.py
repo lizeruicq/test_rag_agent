@@ -198,20 +198,47 @@ def init_system():
             else:
                 persist_path = "./persist_data"
 
-            kb = RAGKnowledgeBase(
-                embedding_model="dashscope",
-                model_name="text-embedding-v4",
-                api_key=os.getenv("DASHSCOPE_API_KEY"),
-                persist_path=persist_path,
-                qdrant_url=qdrant_url
-            )
+            # 使用本地 Ollama 模型配置
+            # 可以通过环境变量覆盖默认配置
+            use_ollama = os.getenv("USE_OLLAMA", "false").lower() == "true"
+            ollama_host = os.getenv("OLLAMA_HOST", None)  # None 表示使用默认地址
 
-            loader = DataLoader(data_dir="./data/documents")
-            agent = SpecializedRAGAgent(
-                name="RAG_Agent",
-                knowledge_base=kb,
-                score_threshold=0.1
-            )
+            if use_ollama:
+                # 使用本地 Ollama 模型
+                kb = RAGKnowledgeBase(
+                    embedding_model="ollama",
+                    model_name=os.getenv("OLLAMA_EMBEDDING_MODEL", "qwen3-embedding:4b"),
+                    persist_path=persist_path,
+                    qdrant_url=qdrant_url,
+                    ollama_host=ollama_host,
+                    dimensions=int(os.getenv("OLLAMA_EMBEDDING_DIM", "1024"))
+                )
+
+                loader = DataLoader(data_dir="./data/documents")
+                agent = SpecializedRAGAgent(
+                    name="RAG_Agent",
+                    knowledge_base=kb,
+                    model_name=os.getenv("OLLAMA_LLM_MODEL", "qwen3:4b"),
+                    model_type="ollama",
+                    ollama_host=ollama_host,
+                    score_threshold=0.1
+                )
+            else:
+                # 使用在线 DashScope 模型（向后兼容）
+                kb = RAGKnowledgeBase(
+                    embedding_model="dashscope",
+                    model_name="text-embedding-v4",
+                    api_key=os.getenv("DASHSCOPE_API_KEY"),
+                    persist_path=persist_path,
+                    qdrant_url=qdrant_url
+                )
+
+                loader = DataLoader(data_dir="./data/documents")
+                agent = SpecializedRAGAgent(
+                    name="RAG_Agent",
+                    knowledge_base=kb,
+                    score_threshold=0.1
+                )
 
             st.session_state.system = {
                 "kb": kb,

@@ -3,3 +3,4 @@ python-docx
 PyPDF2
 pandas
 openpyxl
+ollama>=0.1.7

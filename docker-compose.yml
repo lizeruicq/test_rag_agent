@@ -1,6 +1,28 @@
 version: '3.8'
 
 services:
+  # Ollama 本地模型服务
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      # 模型数据持久化
+      - ./ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    # 如需使用 GPU，取消注释以下行 (需要 nvidia-docker 或类似工具)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
   # Qdrant 向量数据库服务
   qdrant:
     image: qdrant/qdrant:latest
@@ -23,7 +45,14 @@ services:
       dockerfile: Dockerfile
     container_name: rag_app
     environment:
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      # 模型配置: 使用本地 Ollama 模型 (推荐) 或在线 DashScope 模型
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-qwen3:4b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:4b}
+      - OLLAMA_EMBEDDING_DIM=${OLLAMA_EMBEDDING_DIM:-1024}
+      # 备用: DashScope 在线模型 (USE_OLLAMA=false 时启用)
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - QDRANT_URL=http://qdrant:6333
     volumes:
       # 代码目录挂载（开发时实时同步代码变更）

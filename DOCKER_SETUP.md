@@ -2,14 +2,47 @@
 
 ## 快速开始
 
-### 1. 启动 Qdrant 服务
+### 1. 配置环境变量
 
 ```bash
 # 复制环境变量模板
 cp .env.example .env
-# 编辑 .env 文件，填入你的 DASHSCOPE_API_KEY
 
-# 启动 Qdrant（仅向量数据库）
+# 编辑 .env 文件，选择模型配置方案
+# 方案 1: 本地 Ollama 模型（推荐，无需联网）
+USE_OLLAMA=true
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_LLM_MODEL=qwen3:4b
+OLLAMA_EMBEDDING_MODEL=qwen3-embedding:4b
+
+# 方案 2: 在线 DashScope 模型（需要阿里云 API Key）
+# USE_OLLAMA=false
+# DASHSCOPE_API_KEY=your_dashscope_api_key_here
+```
+
+### 2. 启动服务
+
+**使用本地 Ollama 模型（推荐）：**
+
+```bash
+# 启动 Ollama 和 Qdrant
+docker-compose up -d ollama qdrant
+
+# 下载所需模型（首次使用需要）
+docker exec -it rag_ollama ollama pull qwen3:4b
+docker exec -it rag_ollama ollama pull qwen3-embedding:4b
+
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+```
+
+**使用在线 DashScope 模型：**
+
+```bash
+# 仅启动 Qdrant（仅向量数据库）
 docker-compose up -d qdrant
 
 # 查看服务状态
@@ -54,6 +87,7 @@ python rag_knowledge_base/main.py
 | 宿主机路径 | 容器内路径 | 用途 |
 |-----------|-----------|------|
 | `./qdrant_storage` | `/qdrant/storage` | Qdrant 向量数据持久化 |
+| `./ollama_models` | `/root/.ollama` | Ollama 模型文件持久化 |
 | `./data` | `/app/data` | 应用数据文件 |
 | `./persist_data` | `/app/persist_data` | 应用持久化数据 |
 | `./rag_knowledge_base` | `/app/rag_knowledge_base` | 代码（开发时挂载） |
@@ -129,6 +163,26 @@ curl http://localhost:6333/collections
 
 # 查看集合详情
 curl http://localhost:6333/collections/rag_knowledge_base
+```
+
+### Ollama 管理
+
+```bash
+# 进入 Ollama 容器
+docker exec -it rag_ollama /bin/sh
+
+# 列出已下载的模型
+ollama list
+
+# 下载新模型
+ollama pull qwen3:4b
+ollama pull qwen3-embedding:4b
+
+# 删除模型
+ollama rm qwen3:4b
+
+# 查看模型信息
+ollama show qwen3:4b
 ```
 
 ### 数据管理
@@ -229,6 +283,34 @@ curl http://localhost:6333/healthz
 
 # 检查防火墙
 sudo lsof -i :6333
+```
+
+### Ollama 连接问题
+
+```bash
+# 测试 Ollama API
+curl http://localhost:11434/api/tags
+
+# 检查 Ollama 日志
+docker-compose logs -f ollama
+
+# 重启 Ollama 服务
+docker-compose restart ollama
+
+# 确认模型已下载
+docker exec rag_ollama ollama list
+```
+
+### Ollama 模型下载慢
+
+```bash
+# 配置镜像加速（在宿主机执行）
+export OLLAMA_HOST=http://localhost:11434
+
+# 或者修改 docker-compose.yml 添加环境变量
+environment:
+  - OLLAMA_ORIGINS=*
+  - OLLAMA_HOST=0.0.0.0
 ```
 
 ### 数据丢失

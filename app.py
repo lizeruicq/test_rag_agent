@@ -181,7 +181,7 @@ def render_robot(status: str = "idle"):
 st.set_page_config(
     page_title="RAG 知识库问答",
     page_icon="🤖",
-    layout="wide"
+    layout="centered" if not st.session_state.get("authenticated", False) else "wide"
 )
 
 # ==================== Session State ====================
@@ -199,6 +199,69 @@ if "robot_status" not in st.session_state:
 
 if "refresh_docs" not in st.session_state:
     st.session_state.refresh_docs = False
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if "login_error" not in st.session_state:
+    st.session_state.login_error = ""
+
+
+# ==================== 登录验证 ====================
+# 从环境变量获取密码，默认密码为 "rag123"
+APP_PASSWORD = os.getenv("RAG_APP_PASSWORD", "rag123")
+
+
+def check_login(password: str) -> bool:
+    """验证登录密码。"""
+    return password == APP_PASSWORD
+
+
+def show_login_page():
+    """显示登录页面。"""
+    # 居中布局
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>AI知识库智能体</h1>",
+                    unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>请输入暗号进入系统</p>",
+                    unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 口令输入
+        password = st.text_input(
+            "口令",
+            type="password",
+            placeholder="请输入访问暗号...",
+            label_visibility="collapsed"
+        )
+
+        # 显示错误信息
+        if st.session_state.login_error:
+            st.error(st.session_state.login_error)
+
+        # 登录按钮
+        if st.button("暗号核对", use_container_width=True):
+            if check_login(password):
+                st.session_state.authenticated = True
+                st.session_state.login_error = ""
+                st.rerun()
+            else:
+                st.session_state.login_error = "有内鬼，终止交易"
+                st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+       
+
+    return False
+
+
+# ==================== 登录检查 ====================
+if not st.session_state.authenticated:
+    show_login_page()
+    st.stop()
 
 
 # ==================== 初始化系统 ====================
@@ -270,7 +333,7 @@ async def query_agent(question: str) -> str:
 # ==================== 主界面 ====================
 def main():
     """主界面"""
-    st.title("📚 RAG 知识库问答系统")
+    st.title("知识库问答系统")
     st.markdown("---")
 
     # 初始化系统

@@ -20,6 +20,7 @@ else:
     from .data.data_loader import DataLoader
     from .agents.rag_agent import SpecializedRAGAgent
 
+
 class SimpleRAGSystem:
     """Simplified RAG system using local Ollama models."""
 
@@ -129,6 +130,7 @@ class SimpleRAGSystem:
         stats = self.loader.get_statistics()
         print(f"管理文件: {stats['total_files']} 个")
         print(f"存储大小: {stats['total_size']} 字节")
+
 
 async def main_async() -> None:
     """主流程（异步，全程使用 await，仅入口处使用一次 asyncio.run）。"""

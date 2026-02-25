@@ -63,7 +63,7 @@ class RAGKnowledgeBase(KnowledgeBase):
                 location=qdrant_url,
                 collection_name=collection_name,
                 dimensions=self.dimensions,
-                client_kwargs={"timeout": 60}
+                client_kwargs={"timeout": 120}
             )
         elif persist_path and not recreate:
             # Check if persistent data already exists

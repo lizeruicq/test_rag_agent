@@ -7,7 +7,7 @@ import pickle
 
 from agentscope.rag import SimpleKnowledge, QdrantStore, Document, DocMetadata, KnowledgeBase
 import asyncio
-from agentscope.embedding import DashScopeTextEmbedding, OllamaTextEmbedding
+from agentscope.embedding import OllamaTextEmbedding
 
 
 class RAGKnowledgeBase(KnowledgeBase):
@@ -15,65 +15,47 @@ class RAGKnowledgeBase(KnowledgeBase):
     
     def __init__(
         self,
-        embedding_model: str = "dashscope",
-        model_name: str = "text-embedding-v4",
-        api_key: Optional[str] = None,
+        model_name: str = "qwen3-embedding:4b",
         persist_path: Optional[str] = "./persist_data",
         collection_name: str = "rag_knowledge_base",
         recreate: bool = False,
-        qdrant_url: Optional[str] = None,
         ollama_host: Optional[str] = None,
-        dimensions: Optional[int] = None
+        dimensions: int = 1024,
+        qdrant_url: Optional[str] = None
     ) -> None:
         """
-        Initialize the RAG knowledge base.
+        Initialize the RAG knowledge base with Ollama embedding model.
 
         Args:
-            embedding_model: Type of embedding model ('dashscope', 'ollama', or 'openai').
-            model_name: Name of the embedding model.
-            api_key: API key for the embedding service (not required for ollama).
-            persist_path: Path to persist the vector store.
+            model_name: Name of the Ollama embedding model.
+            persist_path: Path to persist the vector store metadata.
             collection_name: Name of the collection in the vector store.
             recreate: Whether to recreate the knowledge base from scratch.
-            qdrant_url: URL for remote Qdrant server.
-            ollama_host: Host URL for Ollama server (e.g., 'http://localhost:11434').
-            dimensions: Embedding dimensions (required for ollama, defaults to 1024 for dashscope).
+            ollama_host: Host URL for Ollama server (default: http://localhost:11434).
+            dimensions: Embedding dimensions (default: 1024).
+            qdrant_url: URL for Qdrant server (e.g., http://localhost:6333).
+                      If provided, uses remote Qdrant service; otherwise uses local file storage.
         """
         self.collection_name = collection_name
         self.persist_path = persist_path
-        self.embedding_model_type = embedding_model
         self.model_name = model_name
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
-        
-        # Create persist directory if it doesn't exist
+        self.ollama_host = ollama_host or "http://localhost:11434"
+        self.qdrant_url = qdrant_url
+
+        # Create persist directory if it doesn't exist (for doc mappings)
         if persist_path:
             os.makedirs(persist_path, exist_ok=True)
-        
-        # Initialize embedding model
-        if embedding_model == "dashscope":
-            if not self.api_key:
-                raise ValueError("DashScope API key is required")
-            self.embedding_model = DashScopeTextEmbedding(
-                model_name=model_name,
-                api_key=self.api_key
-            )
-            print(f"Using DashScope embedding model: {model_name}")
-            # Default dimension: 1024 for text-embedding-v2, otherwise 1536
-            self.dimensions = dimensions or 1024
-        elif embedding_model == "ollama":
-            self.embedding_model = OllamaTextEmbedding(
-                model_name=model_name,
-                dimensions=dimensions or 1024,
-                host=ollama_host
-            )
-            print(f"Using Ollama embedding model: {model_name} (host: {ollama_host or 'default'})")
-            self.dimensions = dimensions or 1024
-        else:
-            raise ValueError(f"Unsupported embedding_model: {embedding_model}. Use 'dashscope' or 'ollama'")
-        
-        # Initialize vector store
-        qdrant_url = qdrant_url or os.getenv("QDRANT_URL")
 
+        # Initialize Ollama embedding model
+        self.embedding_model = OllamaTextEmbedding(
+            model_name=model_name,
+            dimensions=dimensions,
+            host=self.ollama_host
+        )
+        print(f"Using Ollama embedding model: {model_name} (host: {self.ollama_host})")
+        self.dimensions = dimensions
+
+        # Initialize vector store (remote Qdrant or local)
         if qdrant_url:
             # Use remote Qdrant server (Docker)
             print(f"Connecting to Qdrant server at {qdrant_url}")
@@ -81,7 +63,7 @@ class RAGKnowledgeBase(KnowledgeBase):
                 location=qdrant_url,
                 collection_name=collection_name,
                 dimensions=self.dimensions,
-                client_kwargs={"timeout": 60}  # 增加超时时间到60秒
+                client_kwargs={"timeout": 60}
             )
         elif persist_path and not recreate:
             # Check if persistent data already exists
@@ -260,7 +242,7 @@ class RAGKnowledgeBase(KnowledgeBase):
         self,
         query: str,
         limit: int = 5,
-        score_threshold: float | None = 0.5,
+        score_threshold: float | None = 0.1,
         **kwargs: Any,
     ) -> list[Document]:
         """

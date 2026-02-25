@@ -17,6 +17,20 @@ from rag_knowledge_base.rag_knowledge import RAGKnowledgeBase
 from rag_knowledge_base.data.data_loader import DataLoader
 from rag_knowledge_base.agents.rag_agent import SpecializedRAGAgent
 
+
+# ==================== 异步处理辅助函数 ====================
+def run_async(coro):
+    """在 Streamlit 中安全地运行异步协程。"""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
+
 # ==================== 机器人动画配置 ====================
 # 使用在线 Lottie 动画 URL
 ROBOT_ANIMATIONS = {
@@ -189,56 +203,34 @@ if "refresh_docs" not in st.session_state:
 
 # ==================== 初始化系统 ====================
 def init_system():
-    """初始化 RAG 系统"""
+    """Initialize RAG system with local Ollama models."""
     if st.session_state.system is None:
         with st.spinner("正在初始化知识库..."):
+            persist_path = "./persist_data"
+
+            # Ollama server configuration
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+            # Qdrant URL (optional, for Docker Qdrant service)
             qdrant_url = os.getenv("QDRANT_URL")
-            if qdrant_url:
-                persist_path = None
-            else:
-                persist_path = "./persist_data"
 
-            # 使用本地 Ollama 模型配置
-            # 可以通过环境变量覆盖默认配置
-            use_ollama = os.getenv("USE_OLLAMA", "false").lower() == "true"
-            ollama_host = os.getenv("OLLAMA_HOST", None)  # None 表示使用默认地址
+            # Initialize with local Ollama models
+            kb = RAGKnowledgeBase(
+                model_name="qwen3-embedding:4b",
+                persist_path=persist_path,
+                ollama_host=ollama_host,
+                dimensions=1024,
+                qdrant_url=qdrant_url
+            )
 
-            if use_ollama:
-                # 使用本地 Ollama 模型
-                kb = RAGKnowledgeBase(
-                    embedding_model="ollama",
-                    model_name=os.getenv("OLLAMA_EMBEDDING_MODEL", "qwen3-embedding:4b"),
-                    persist_path=persist_path,
-                    qdrant_url=qdrant_url,
-                    ollama_host=ollama_host,
-                    dimensions=int(os.getenv("OLLAMA_EMBEDDING_DIM", "1024"))
-                )
-
-                loader = DataLoader(data_dir="./data/documents")
-                agent = SpecializedRAGAgent(
-                    name="RAG_Agent",
-                    knowledge_base=kb,
-                    model_name=os.getenv("OLLAMA_LLM_MODEL", "qwen3:4b"),
-                    model_type="ollama",
-                    ollama_host=ollama_host,
-                    score_threshold=0.1
-                )
-            else:
-                # 使用在线 DashScope 模型（向后兼容）
-                kb = RAGKnowledgeBase(
-                    embedding_model="dashscope",
-                    model_name="text-embedding-v4",
-                    api_key=os.getenv("DASHSCOPE_API_KEY"),
-                    persist_path=persist_path,
-                    qdrant_url=qdrant_url
-                )
-
-                loader = DataLoader(data_dir="./data/documents")
-                agent = SpecializedRAGAgent(
-                    name="RAG_Agent",
-                    knowledge_base=kb,
-                    score_threshold=0.1
-                )
+            loader = DataLoader(data_dir="./data/documents")
+            agent = SpecializedRAGAgent(
+                name="RAG_Agent",
+                knowledge_base=kb,
+                model_name="qwen3:4b",
+                ollama_host=ollama_host,
+                score_threshold=0.1
+            )
 
             st.session_state.system = {
                 "kb": kb,
@@ -257,7 +249,7 @@ async def query_agent(question: str) -> str:
         return "系统未初始化"
 
     msg = Msg(name="User", content=question, role="user")
-    response = await system["agent"](msg)
+    response = await system["agent"].reply(msg)
 
     # 处理不同类型的 content
     content = response.content
@@ -324,7 +316,7 @@ def main():
                         return False
 
                     try:
-                        result = asyncio.run(add_doc())
+                        result = run_async(add_doc())
                         if result:
                             st.success(f"✅ {uploaded_file.name} 添加成功！")
                         else:
@@ -364,7 +356,7 @@ def main():
                                 pass
 
                         try:
-                            asyncio.run(delete_doc(md5))
+                            run_async(delete_doc(md5))
                             st.success("✅ 删除成功！")
                             st.rerun()
                         except Exception as e:
@@ -406,7 +398,7 @@ def main():
             if st.session_state.robot_status == "thinking":
                 try:
                     # 运行查询
-                    answer = asyncio.run(query_agent(last_message["content"]))
+                    answer = run_async(query_agent(last_message["content"]))
                     st.session_state.current_answer = answer
                     # 切换到说话状态并刷新，让侧边栏机器人更新
                     st.session_state.robot_status = "speaking"

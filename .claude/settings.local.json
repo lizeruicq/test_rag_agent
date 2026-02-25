@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(open -a Ollama)",
-      "Bash(open -a Calculator)"
+      "Bash(open -a Calculator)",
+      "Bash(source /Volumes/EAGET/test_agent/.venv/bin/activate && pip list 2>/dev/null | grep -E \"\\(agentscope|ollama|qdrant|streamlit\\)\" || echo \"需要检查依赖\")"
     ]
   }
 }

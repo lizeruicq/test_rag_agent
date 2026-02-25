@@ -4,11 +4,11 @@ RAG 智能体 - 从知识库中检索信息并生成回答
 from typing import Optional
 from agentscope.agent import AgentBase
 from agentscope.message import Msg, TextBlock
-from agentscope.model import DashScopeChatModel, OllamaChatModel
+from agentscope.model import OllamaChatModel
 from agentscope.tool import ToolResponse
 from agentscope.agent import ReActAgent
 from agentscope.tool import Toolkit
-from agentscope.formatter import DashScopeChatFormatter, OllamaChatFormatter
+from agentscope.formatter import OllamaChatFormatter
 from ..rag_knowledge import RAGKnowledgeBase
 
 
@@ -21,56 +21,38 @@ class SimpleRAGAgent(AgentBase):
         self,
         name: str,
         knowledge_base: RAGKnowledgeBase,
-        model_name: str = "deepseek-v3.2",
-        api_key: Optional[str] = None,
+        model_name: str = "qwen3:4b",
         retrieve_limit: int = 5,
         score_threshold: float = 0.1,
-        model_type: str = "dashscope",
         ollama_host: Optional[str] = None
     ):
         """
-        初始化 RAG 智能体
+        Initialize RAG agent with Ollama chat model.
 
         Args:
-            name: 智能体名称
-            knowledge_base: RAG 知识库实例
-            model_name: 使用的语言模型名称
-            api_key: API 密钥（如果为 None，将从环境变量读取，不适用于 ollama）
-            retrieve_limit: 检索文档的最大数量
-            score_threshold: 相似度阈值
-            model_type: 模型类型 ('dashscope' 或 'ollama')
-            ollama_host: Ollama 服务器地址 (如 'http://localhost:11434')
+            name: Agent name
+            knowledge_base: RAG knowledge base instance
+            model_name: Name of the Ollama chat model (default: qwen3:4b)
+            retrieve_limit: Maximum number of documents to retrieve
+            score_threshold: Similarity threshold for retrieval
+            ollama_host: Ollama server address (default: http://localhost:11434)
         """
         super().__init__()
         self.name = name
         self.kb = knowledge_base
         self.model_name = model_name
-        self.model_type = model_type
-        self.ollama_host = ollama_host
-        self.api_key = api_key or getattr(knowledge_base, 'api_key', None)
+        self.ollama_host = ollama_host or "http://localhost:11434"
         self.retrieve_limit = retrieve_limit
         self.score_threshold = score_threshold
 
-        # 初始化语言模型
-        if model_type == "ollama":
-            self.model = OllamaChatModel(
-                model_name=model_name,
-                host=ollama_host,
-                enable_thinking=False
-            )
-            formatter = OllamaChatFormatter()
-            print(f"Using Ollama chat model: {model_name} (host: {ollama_host or 'default'})")
-        elif model_type == "dashscope":
-            if not self.api_key:
-                raise ValueError("API key is required for DashScope model")
-            self.model = DashScopeChatModel(
-                model_name=model_name,
-                api_key=self.api_key
-            )
-            formatter = DashScopeChatFormatter()
-            print(f"Using DashScope chat model: {model_name}")
-        else:
-            raise ValueError(f"Unsupported model_type: {model_type}. Use 'dashscope' or 'ollama'")
+        # Initialize Ollama chat model
+        self.model = OllamaChatModel(
+            model_name=model_name,
+            host=self.ollama_host,
+            enable_thinking=False
+        )
+        formatter = OllamaChatFormatter()
+        print(f"Using Ollama chat model: {model_name} (host: {self.ollama_host or 'default'})")
 
         # 保存 formatter 供后续使用
         self.formatter = formatter

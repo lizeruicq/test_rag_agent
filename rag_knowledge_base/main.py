@@ -21,39 +21,38 @@ else:
     from .agents.rag_agent import SpecializedRAGAgent
 
 class SimpleRAGSystem:
-    """简化版RAG系统"""
+    """Simplified RAG system using local Ollama models."""
 
     def __init__(self):
-        # 检查是否使用 Docker Qdrant
-        # 优先从环境变量读取，如果没有则检测本地 Qdrant 是否运行
+        # Ollama host (default: http://localhost:11434)
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+        # Qdrant URL (optional, for Docker Qdrant service)
         qdrant_url = os.getenv("QDRANT_URL")
-        # if not qdrant_url:
-        #     # 检测 localhost:6333 是否可用
-        #     import urllib.request
-        #     try:
-        #         urllib.request.urlopen("http://localhost:6333/healthz", timeout=2)
-        #         qdrant_url = "http://localhost:6333"
-        #         print("检测到本地 Qdrant 服务运行中")
-        #     except:
-        #         pass
 
         if qdrant_url:
-            print(f"使用 Docker Qdrant: {qdrant_url}")
-            persist_path = None  # 使用远程 Qdrant 时不需要本地路径
+            print(f"Using Qdrant Docker service: {qdrant_url}")
+            persist_path = "./persist_data"  # Still needed for doc mappings
         else:
-            print("使用本地文件存储")
-            persist_path = "./persist_data"  # 本地持久化路径
+            print("Using local file storage for vector store")
+            persist_path = "./persist_data"
 
         self.kb = RAGKnowledgeBase(
-            embedding_model="dashscope",
-            model_name="text-embedding-v4",
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
+            model_name="qwen3-embedding:4b",
             persist_path=persist_path,
+            ollama_host=ollama_host,
+            dimensions=1024,
             qdrant_url=qdrant_url
         )
         self.loader = DataLoader(data_dir="./data/documents")
-        self.agent = SpecializedRAGAgent(name="RAG_Agent", knowledge_base=self.kb, score_threshold=0.1)
-    
+        self.agent = SpecializedRAGAgent(
+            name="RAG_Agent",
+            knowledge_base=self.kb,
+            model_name="qwen3:4b",
+            ollama_host=ollama_host,
+            score_threshold=0.1
+        )
+
     async def add_documents(self, path: str) -> None:
         """添加文档（异步，可在已有事件循环中调用）。"""
         if os.path.isfile(path):
@@ -117,14 +116,14 @@ class SimpleRAGSystem:
                 print(f"已删除 {md5}")
             except Exception as e:
                 print(f"删除 {md5} 失败: {e}")
-    
+
     async def query(self, question: str) -> str:
         """查询知识库。"""
         from agentscope.message import Msg
         msg = Msg(name="User", content=question, role="user")
-        response = await self.agent(msg)
+        response = await self.agent.reply(msg)
         return response.content
-    
+
     def stats(self):
         """显示统计信息"""
         stats = self.loader.get_statistics()

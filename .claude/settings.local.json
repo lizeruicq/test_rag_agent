@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(open -a Ollama)",
-      "Bash(open -a Calculator)"
+      "Bash(open -a Calculator)",
+      "Read(//Users/zeruili/projects/copaw/**)",
+      "Bash(find . -type f -name *.html -o -name *.css -o -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx -o -name *.vue)",
+      "Bash(source:*)",
+      "Bash(cd rpg-frontend:*)",
+      "Bash(git check-ignore:*)"
     ]
   }
 }
